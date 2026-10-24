@@ -1,32 +1,35 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — 2026-10-25
 
-- Rename the application to BraveTrace.
-- Add `BRAVETRACE_*` settings while accepting the previous environment variables.
-  Keep the database filename and browser job key to preserve existing state.
-- Preserve sample-document text so duplicate detection also works after upgrading.
+SourceDesk is the first stable release of the application previously named BraveTrace.
+
+- Add a Windows launcher and a portable Python launcher that set up dependencies,
+  open the browser, and select a free loopback port.
+- Add workspace ZIP backups using a consistent SQLite snapshot, including WAL data.
+- Add offline restore with checksum, path, database, and reference validation.
+  Existing workspaces are never overwritten.
+- Continue batch uploads after a failed file and report individual failures.
+- Show semantic index coverage and expose a full rebuild in the AI setup guide.
+- Keep research usable when browser session storage is blocked.
+- Add `SOURCEDESK_*` settings while preserving both previous configuration prefixes,
+  the database filename, source IDs, saved research, and cached vectors.
+- Refresh the name, document icon, interface accents, accessibility labels, and
+  reduced-motion behavior. Prevent stale API responses from being cached.
+- Add reproducible source packaging and extend backend and browser regression checks.
 
 ## 0.2.0
 
-- Prefer paragraph boundaries when splitting new uploads; use 700-character
-  passages with 120 characters of overlap.
-- Add English stemming, query-coverage filtering, numeric constraints, and FTS
-  snippets to keyword search.
-- Save the latest 100 research results and export notes with full source passages.
-- Build embeddings in a background job, with progress and cancellation after the
-  current batch. Reuse saved vectors when resuming.
-- Retry an invalid AI answer format or citation set once before withholding it.
-- Add a mobile library toggle and a more compact results view.
-- Migrate v0.1 databases without changing existing document IDs, source IDs, or
-  embeddings.
-
-The sample retrieval checks now pass 18/18 cases, up from 15/18. The three added
-passes reject unrelated queries that share one word with a document. The sample
-contains only three fictional documents; evaluation details are in
-[docs/VERIFICATION.md](docs/VERIFICATION.md).
+- Prefer paragraph boundaries when splitting uploads; use 700-character passages
+  with 120 characters of overlap.
+- Add English stemming, query-coverage filtering, numeric constraints, and FTS snippets.
+- Save the latest 100 research results and export full source passages as Markdown.
+- Build embeddings in a background job with progress, cancellation, and cached resume.
+- Retry invalid AI formats or citations once before withholding the answer.
+- Add a mobile library toggle and compact results.
+- Migrate v0.1 databases without changing source IDs or cached embeddings.
 
 ## 0.1.0
 
-Initial version with PDF/TXT/Markdown uploads, SQLite search, source inspection,
-Ollama integration, hybrid retrieval, tests, and a browser interface.
+Initial PDF, TXT, and Markdown uploads, SQLite search, source inspection, Ollama
+integration, hybrid retrieval, and browser interface.

@@ -1,7 +1,7 @@
 {
-  "name": "bravetrace-browser-checks",
+  "name": "sourcedesk-browser-checks",
   "private": true,
-  "description": "Optional browser checks; Node.js is not required to run BraveTrace",
+  "description": "Optional browser checks; Node.js is not required to run SourceDesk",
   "scripts": {
     "test:browser": "node scripts/browser_smoke.cjs",
     "format:frontend": "prettier --write frontend scripts/browser_smoke.cjs",

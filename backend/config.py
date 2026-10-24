@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _env(name: str, default: str) -> str:
-    return os.getenv(f"BRAVETRACE_{name}", os.getenv(f"EVIDENCELENS_{name}", default))
+    for prefix in ("SOURCEDESK", "BRAVETRACE", "EVIDENCELENS"):
+        value = os.getenv(f"{prefix}_{name}")
+        if value is not None:
+            return value
+    return default
 
 
 @dataclass(frozen=True)
@@ -30,9 +34,20 @@ class Settings:
     ai_timeout: float = 90.0
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "data_dir", self.data_dir.expanduser().resolve())
+        object.__setattr__(self, "ollama_url", self.ollama_url.rstrip("/"))
         parsed = urlparse(self.ollama_url)
         if parsed.scheme != "http" or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
             raise ValueError("OLLAMA_BASE_URL must point to a local HTTP server.")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path:
+            raise ValueError(
+                "OLLAMA_BASE_URL must be a base address without a path or credentials."
+            )
+        try:
+            if parsed.port == 0:
+                raise ValueError("Port zero is not a model service address.")
+        except ValueError as exc:
+            raise ValueError("OLLAMA_BASE_URL has an invalid port.") from exc
         if not 0 <= self.chunk_overlap < self.chunk_size:
             raise ValueError("Chunk overlap must be smaller than chunk size.")
 

@@ -6,7 +6,7 @@
   --line: #303437;
   --text: #edf0ed;
   --muted: #a0a6a8;
-  --accent: #eda887;
+  --accent: #9ebff0;
   --sage: #a9c4b1;
   --radius: 14px;
   font-family:
@@ -92,6 +92,23 @@ svg {
 }
 .muted {
   color: var(--muted);
+}
+.index-settings {
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.main-footer > div {
+  flex-wrap: wrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 .app-shell {
   display: grid;

@@ -9,10 +9,13 @@ from fastapi import FastAPI, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from backend import APP_ID, APP_NAME, __version__
+from backend.backup import create_backup
 from backend.config import ROOT, Settings
 from backend.errors import AppError
 from backend.jobs import IndexJobs
@@ -20,7 +23,7 @@ from backend.ollama import Ollama
 from backend.research import AskRequest, IndexRequest, Research, SearchRequest
 from backend.storage import Store
 
-logger = logging.getLogger("bravetrace")
+logger = logging.getLogger("sourcedesk")
 
 
 class BodyLimitMiddleware:
@@ -87,8 +90,8 @@ def create_app(settings: Settings | None = None, ai: Ollama | None = None) -> Fa
             await run_in_threadpool(jobs.close)
 
     application = FastAPI(
-        title="BraveTrace",
-        version="0.2.0",
+        title=APP_NAME,
+        version=__version__,
         lifespan=lifespan,
         description="Local document research with inspectable source passages.",
         docs_url="/api/docs",
@@ -113,7 +116,7 @@ def create_app(settings: Settings | None = None, ai: Ollama | None = None) -> Fa
                     {
                         "error": {
                             "code": "origin_blocked",
-                            "message": "Use BraveTrace from its own browser tab.",
+                            "message": "Use SourceDesk from its own browser tab.",
                         }
                     },
                     status_code=403,
@@ -121,6 +124,9 @@ def create_app(settings: Settings | None = None, ai: Ollama | None = None) -> Fa
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = (
+            "no-store" if request.url.path.startswith("/api/") else "no-cache"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
             if not request.url.path.startswith("/api/docs")
@@ -179,7 +185,8 @@ def create_app(settings: Settings | None = None, ai: Ollama | None = None) -> Fa
     def health():
         return {
             "status": "ok",
-            "version": "0.2.0",
+            "application": APP_ID,
+            "version": __version__,
             "python": sys.version.split()[0],
             "storage": store.stats(config.embedding_model),
         }
@@ -200,6 +207,16 @@ def create_app(settings: Settings | None = None, ai: Ollama | None = None) -> Fa
     @application.get("/api/documents", tags=["documents"])
     def documents():
         return {"documents": store.documents(config.embedding_model)}
+
+    @application.get("/api/workspace/backup", tags=["system"])
+    def backup():
+        path = create_backup(store)
+        return FileResponse(
+            path,
+            filename=path.name,
+            media_type="application/zip",
+            background=BackgroundTask(path.unlink, missing_ok=True),
+        )
 
     @application.post("/api/documents", tags=["documents"], status_code=201)
     async def upload(file: UploadFile):

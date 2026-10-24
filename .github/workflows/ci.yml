@@ -32,6 +32,8 @@ jobs:
           python -m pip install --only-binary=:all: -r requirements-dev.txt -c requirements-lock.txt
       - name: Check environment
         run: python scripts/doctor.py
+      - name: Check first-run launcher
+        run: python run.py --check
       - name: Check style
         run: |
           python -m ruff check .
@@ -40,3 +42,25 @@ jobs:
         run: python -m pytest -q
       - name: Run retrieval baseline
         run: python scripts/evaluate.py
+      - name: Build source archive
+        run: python scripts/package.py
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install application and browser tools
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --only-binary=:all: -r requirements.txt -c requirements-lock.txt
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Check frontend and browser workflow
+        run: |
+          npm run check:frontend
+          npm run test:browser

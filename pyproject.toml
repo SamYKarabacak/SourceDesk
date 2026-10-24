@@ -1,6 +1,6 @@
 [project]
-name = "bravetrace"
-version = "0.2.0"
+name = "sourcedesk"
+version = "1.0.0"
 description = "Local document research with inspectable evidence and optional AI"
 requires-python = ">=3.12"
 
@@ -10,7 +10,7 @@ pythonpath = ["."]
 addopts = "-ra"
 
 [tool.ruff]
-target-version = "py315"
+target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#17191b" />
-    <title>BraveTrace — Document research</title>
+    <title>SourceDesk — Document research</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/assets/styles.css" />
     <script src="/assets/app.js" defer></script>
@@ -41,9 +41,7 @@
           <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />
         </symbol>
         <symbol id="i-lens" viewBox="0 0 32 32">
-          <circle cx="14" cy="14" r="10" />
-          <circle cx="14" cy="14" r="5" />
-          <path d="m22 22 7 7M14 1v3M1 14h3" />
+          <path d="M7 4h14l5 5v19H7zM20 4v7h6M12 16h9M12 21h6" />
         </symbol>
       </defs>
     </svg>
@@ -53,7 +51,7 @@
           <a href="/" class="brand"
             ><span class="brand-mark"
               ><svg><use href="#i-lens" /></svg></span
-            ><span>BraveTrace<small>DOCUMENT RESEARCH</small></span></a
+            ><span>SourceDesk<small>DOCUMENT RESEARCH</small></span></a
           ><button
             id="library-toggle"
             class="library-toggle"
@@ -186,7 +184,7 @@
                   <svg aria-hidden="true"><use href="#i-search" /></svg
                   >Search</button
                 ><button id="ask-button" class="primary-button" type="button">
-                  Ask BraveTrace<svg aria-hidden="true">
+                  Ask SourceDesk<svg aria-hidden="true">
                     <use href="#i-arrow" />
                   </svg>
                 </button>
@@ -273,8 +271,11 @@
             </div>
           </section>
           <footer class="main-footer">
-            <span>BraveTrace <span class="version">v0.2</span></span>
+            <span>SourceDesk <span class="version">v1.0</span></span>
             <div>
+              <button id="backup-button" type="button">
+                Back up workspace
+              </button>
               <button id="index-button" type="button">
                 Build semantic index</button
               ><a href="/api/docs" target="_blank" rel="noopener">API docs ↗</a>
@@ -283,7 +284,11 @@
         </div>
       </main>
     </div>
-    <dialog id="source-dialog" class="source-dialog">
+    <dialog
+      id="source-dialog"
+      class="source-dialog"
+      aria-labelledby="source-title"
+    >
       <div class="dialog-heading">
         <div>
           <span class="eyebrow">SOURCE INSPECTOR</span>
@@ -308,11 +313,11 @@
         >
       </div>
     </dialog>
-    <dialog id="help-dialog" class="help-dialog">
+    <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
       <div class="dialog-heading">
         <div>
           <span class="eyebrow">OPTIONAL LOCAL AI</span>
-          <h2>Enable AI answers</h2>
+          <h2 id="help-title">Enable AI answers</h2>
         </div>
         <button
           id="help-close"
@@ -350,6 +355,17 @@
         <button id="refresh-status" class="primary-button" type="button">
           Refresh AI status
         </button>
+        <div class="index-settings">
+          <h3>Semantic index</h3>
+          <p id="index-summary">Checking indexed passages…</p>
+          <p class="muted">
+            Rebuild after replacing an embedding model under the same name. Your
+            documents and saved research stay available.
+          </p>
+          <button id="rebuild-index" class="secondary-button" type="button">
+            Rebuild semantic index
+          </button>
+        </div>
       </div>
     </dialog>
     <dialog id="delete-dialog" class="delete-dialog">

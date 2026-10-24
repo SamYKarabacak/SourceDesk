@@ -163,7 +163,7 @@ files are independent copies and cannot be removed by later library deletion.
 
 Stop the old server and back up the entire data directory before installing the
 new source. If moving to a new project folder, copy the old `data/` folder into
-it, or point `BRAVETRACE_DATA_DIR` at the existing directory.
+it, or point `SOURCEDESK_DATA_DIR` at the existing directory.
 
 `PRAGMA user_version` identifies schema version 2. Version 1 upgrades inside a
 transaction: its derived FTS index is rebuilt with the new tokenizer, and history
@@ -241,3 +241,25 @@ Interactive API documentation may load Swagger resources from a CDN.
 4. Add OCR and benchmark extraction on multi-column PDFs and tables.
 5. For public demonstration, build a read-only sample-data mode or authenticated
    upload workflow, request quotas, durable storage, and deployment configuration.
+
+
+## V1 startup and workspace portability
+
+`run.py` bootstraps the pinned runtime requirements in `.venv`, selects a free
+loopback port, and starts the same ASGI app used by development and tests. It
+opens the browser only after the health endpoint responds. It owns and stops
+only the server child it started.
+
+`GET /api/workspace/backup` holds the Store writer lock while copying SQLite
+through its backup API and packaging original uploads. The response deletes
+its temporary archive after download. A manifest identifies the format and
+records the database checksum; document checksums come from the snapshot.
+
+Restore runs before the server starts, in a sibling staging directory. It
+accepts only the manifest, database, and UUID-named uploads, limits uncompressed
+size to 1 GB, checks database integrity and foreign keys, and verifies each
+original file against its recorded SHA-256. A completed workspace is moved
+into an empty target folder; existing data is never replaced.
+
+Environment setting precedence is `SOURCEDESK_*`, `BRAVETRACE_*`, then
+`EVIDENCELENS_*`. The legacy database filename and browser job key are retained.

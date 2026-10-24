@@ -8,11 +8,25 @@ const state = {
   mode: "evidence",
   busy: false,
   aiReady: false,
+  embeddingReady: false,
+  limits: { upload_mb: 10 },
   pendingDelete: null,
   lastResult: null,
   indexJob: null,
   indexTimer: null,
 };
+
+function savedJob(value) {
+  try {
+    const key = "evidencelens-index-job";
+    if (value === undefined) return sessionStorage.getItem(key);
+    if (value === null) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch {
+    // Storage can be blocked by browser policy; the workspace still works.
+  }
+  return null;
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -44,7 +58,7 @@ async function api(path, options = {}) {
     data = await response.json();
   } catch {
     throw new Error(
-      "The server returned an unreadable response. Check the VS Code terminal.",
+      "The server returned an unreadable response. Check the SourceDesk terminal.",
     );
   }
   if (!response.ok)
@@ -64,7 +78,7 @@ function failure(error) {
   const message = ["TimeoutError", "AbortError"].includes(error.name)
     ? "The request timed out. Check the server terminal and local model, then try again."
     : error.message === "Failed to fetch"
-      ? "Cannot reach the application. Check that the server is running in VS Code."
+      ? "Cannot reach the application. Check that the SourceDesk launcher is running."
       : error.message;
   notice(message, "error");
 }
@@ -78,11 +92,14 @@ function busy(value) {
     "sample-button",
     "index-button",
     "refresh-status",
+    "backup-button",
+    "rebuild-index",
     "delete-confirm",
   ])
     $(id).disabled = value;
   $("file-input").disabled = value;
   $("index-button").disabled = value || Boolean(state.indexJob);
+  $("rebuild-index").disabled = value || Boolean(state.indexJob);
   $("results").setAttribute("aria-busy", String(value));
 }
 
@@ -168,6 +185,11 @@ async function refresh() {
     ? `${counts.documents} document${counts.documents === 1 ? "" : "s"} · ${counts.chunks} searchable passages`
     : "Your research workspace is ready.";
   state.aiReady = status.ai.chat_ready;
+  state.embeddingReady = status.ai.embedding_ready;
+  state.limits = status.limits;
+  $("index-summary").textContent = counts.chunks
+    ? `${counts.embedded_chunks} of ${counts.chunks} passages indexed`
+    : "Add documents to build the semantic index.";
   $("ai-dot").classList.toggle("ready", state.aiReady);
   $("ai-status").textContent = state.aiReady
     ? "Local AI is ready"
@@ -187,24 +209,31 @@ async function uploadFiles(files) {
   let added = 0,
     duplicates = 0;
   const warnings = [];
+  const errors = [];
   try {
     for (const file of files) {
       notice(`Adding ${file.name}…`);
-      if (file.size > 10 * 1024 * 1024)
-        throw new Error(`${file.name} exceeds the 10 MB document limit.`);
-      const form = new FormData();
-      form.append("file", file);
-      const result = await api("/api/documents", {
-        method: "POST",
-        body: form,
-      });
-      result.duplicate ? duplicates++ : added++;
-      if (result.warning) warnings.push(result.warning);
+      try {
+        if (file.size > state.limits.upload_mb * 1024 * 1024)
+          throw new Error(
+            `Exceeds the ${state.limits.upload_mb} MB document limit.`,
+          );
+        const form = new FormData();
+        form.append("file", file);
+        const result = await api("/api/documents", {
+          method: "POST",
+          body: form,
+        });
+        result.duplicate ? duplicates++ : added++;
+        if (result.warning) warnings.push(`${file.name}: ${result.warning}`);
+      } catch (error) {
+        errors.push(`${file.name}: ${error.message}`);
+      }
     }
-    clearResults();
+    if (added) clearResults();
     notice(
-      `${added} document${added === 1 ? "" : "s"} added${duplicates ? `; ${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped` : ""}.${warnings.length ? ` ${warnings.join(" ")}` : ""}`,
-      "success",
+      `${added} document${added === 1 ? "" : "s"} added${duplicates ? `; ${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped` : ""}.${warnings.length ? ` ${warnings.join(" ")}` : ""}${errors.length ? ` ${errors.length} file${errors.length === 1 ? "" : "s"} could not be added. ${errors.join(" ")}` : ""}`,
+      errors.length ? "error" : "success",
     );
   } catch (error) {
     failure(error);
@@ -584,16 +613,25 @@ $("refresh-status").addEventListener("click", async () => {
     failure(error);
   }
 });
-$("index-button").addEventListener("click", async () => {
+async function startIndex(force = false) {
   if (state.busy || state.indexJob) return;
+  if (!state.documents.length) {
+    notice("Add documents before building the semantic index.");
+    return;
+  }
+  if (!state.embeddingReady) {
+    $("help-dialog").showModal();
+    return;
+  }
   $("index-button").disabled = true;
+  $("rebuild-index").disabled = true;
   try {
     const job = await api("/api/index-jobs", {
       method: "POST",
-      body: JSON.stringify({ document_id: null, force: false }),
+      body: JSON.stringify({ document_id: null, force }),
     });
     state.indexJob = job.id;
-    sessionStorage.setItem("evidencelens-index-job", job.id);
+    savedJob(job.id);
     $("index-progress").hidden = false;
     $("index-progress").scrollIntoView({
       block: "nearest",
@@ -604,7 +642,13 @@ $("index-button").addEventListener("click", async () => {
     failure(error);
   } finally {
     $("index-button").disabled = state.busy || Boolean(state.indexJob);
+    $("rebuild-index").disabled = state.busy || Boolean(state.indexJob);
   }
+}
+$("index-button").addEventListener("click", () => startIndex());
+$("rebuild-index").addEventListener("click", () => {
+  $("help-dialog").close();
+  startIndex(true);
 });
 $("delete-cancel").addEventListener("click", () => $("delete-dialog").close());
 $("delete-confirm").addEventListener("click", async () => {
@@ -726,7 +770,7 @@ function fenced(text) {
 }
 function exportNotes(data, action) {
   const lines = [
-    "# BraveTrace research notes",
+    "# SourceDesk research notes",
     "",
     `- Question: ${markdownText(data.query)}`,
     `- Mode: ${action === "search" ? "Search" : data.mode === "ai" ? "Local AI answer" : "Evidence excerpts"}`,
@@ -759,7 +803,7 @@ function exportNotes(data, action) {
   const url = URL.createObjectURL(blob);
   const link = element("a");
   link.href = url;
-  link.download = `BraveTrace_${(data.created_at || new Date().toISOString()).slice(0, 10)}.md`;
+  link.download = `SourceDesk_${(data.created_at || new Date().toISOString()).slice(0, 10)}.md`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -785,7 +829,7 @@ async function pollIndex() {
         : "You can continue researching while the index builds.";
     if (["completed", "cancelled", "failed"].includes(job.status)) {
       state.indexJob = null;
-      sessionStorage.removeItem("evidencelens-index-job");
+      savedJob(null);
       $("index-progress").hidden = true;
       await refresh();
       if (job.status === "completed")
@@ -803,13 +847,15 @@ async function pollIndex() {
           "error",
         );
       $("index-button").disabled = state.busy;
+      $("rebuild-index").disabled = state.busy;
     } else state.indexTimer = setTimeout(pollIndex, 700);
   } catch (error) {
     if (state.indexJob && state.indexJob !== jobId) return;
     state.indexJob = null;
-    sessionStorage.removeItem("evidencelens-index-job");
+    savedJob(null);
     $("index-progress").hidden = true;
     $("index-button").disabled = state.busy;
+    $("rebuild-index").disabled = state.busy;
     failure(error);
   }
 }
@@ -869,8 +915,41 @@ document.addEventListener("keydown", (event) => {
     $("question").focus();
   }
 });
-state.indexJob = sessionStorage.getItem("evidencelens-index-job");
+state.indexJob = savedJob();
 if (state.indexJob) {
   $("index-button").disabled = true;
   pollIndex();
 }
+
+$("backup-button").addEventListener("click", async () => {
+  if (state.busy) return;
+  busy(true);
+  notice("Preparing your workspace backup…");
+  try {
+    const response = await fetch("/api/workspace/backup", {
+      signal: AbortSignal.timeout(300000),
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(
+        data.error?.message || "The backup could not be created.",
+      );
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = element("a");
+    link.href = url;
+    link.download = `SourceDesk-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notice(
+      "Backup prepared. Save the ZIP in a safe place; it contains your documents and research history.",
+      "success",
+    );
+  } catch (error) {
+    failure(error);
+  } finally {
+    busy(false);
+  }
+});

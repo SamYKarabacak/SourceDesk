@@ -8,7 +8,7 @@ from backend.main import create_app
 from tests.conftest import FakeOllama, upload
 
 
-@pytest.mark.parametrize("prefix", ["EVIDENCELENS", "BRAVETRACE"])
+@pytest.mark.parametrize("prefix", ["EVIDENCELENS", "BRAVETRACE", "SOURCEDESK"])
 def test_environment_settings_reopen_existing_research(tmp_path, monkeypatch, prefix):
     data_dir = tmp_path / "data"
     original = Settings(data_dir=data_dir)
@@ -22,7 +22,7 @@ def test_environment_settings_reopen_existing_research(tmp_path, monkeypatch, pr
     assert (data_dir / "evidencelens.sqlite3").is_file()
 
     for name in ["DATA_DIR", "CHAT_MODEL", "EMBEDDING_MODEL"]:
-        for previous in ["EVIDENCELENS", "BRAVETRACE"]:
+        for previous in ["EVIDENCELENS", "BRAVETRACE", "SOURCEDESK"]:
             monkeypatch.delenv(f"{previous}_{name}", raising=False)
     monkeypatch.setenv(f"{prefix}_DATA_DIR", str(data_dir))
     monkeypatch.setenv(f"{prefix}_CHAT_MODEL", "custom-chat")
@@ -41,12 +41,10 @@ def test_environment_settings_reopen_existing_research(tmp_path, monkeypatch, pr
             == "Refunds are available within thirty days."
         )
     assert model.embed_calls == model.generate_calls == 0
-    assert not (data_dir / "bravetrace.sqlite3").exists()
+    assert not (data_dir / "sourcedesk.sqlite3").exists()
 
 
-def test_bravetrace_settings_take_precedence_without_writing_to_legacy_directory(
-    tmp_path, monkeypatch
-):
+def test_bravetrace_settings_take_precedence_over_evidencelens(tmp_path, monkeypatch):
     legacy_dir = tmp_path / "legacy"
     current_dir = tmp_path / "current"
     for name, legacy, current in [
@@ -65,3 +63,29 @@ def test_bravetrace_settings_take_precedence_without_writing_to_legacy_directory
         assert len(client.get("/api/documents").json()["documents"]) == 1
     assert (current_dir / "evidencelens.sqlite3").is_file()
     assert not legacy_dir.exists()
+
+
+def test_sourcedesk_settings_take_precedence_over_both_older_names(tmp_path, monkeypatch):
+    for prefix in ("EVIDENCELENS", "BRAVETRACE", "SOURCEDESK"):
+        monkeypatch.setenv(f"{prefix}_DATA_DIR", str(tmp_path / prefix))
+        monkeypatch.setenv(f"{prefix}_CHAT_MODEL", prefix)
+        monkeypatch.setenv(f"{prefix}_EMBEDDING_MODEL", prefix)
+    settings = Settings()
+    assert settings.data_dir == tmp_path / "SOURCEDESK"
+    assert settings.chat_model == settings.embedding_model == "SOURCEDESK"
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "http://localhost:bad",
+        "http://localhost/api",
+        "http://user:pass@localhost:11434",
+        "http://localhost?token=x",
+        "http://localhost#fragment",
+        "http://localhost:99999",
+    ],
+)
+def test_invalid_model_service_addresses_are_rejected(address):
+    with pytest.raises(ValueError):
+        Settings(ollama_url=address)

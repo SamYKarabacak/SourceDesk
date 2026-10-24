@@ -13,7 +13,7 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const python =
-  process.env.BRAVETRACE_PYTHON ||
+  process.env.SOURCEDESK_PYTHON ||
   path.join(
     root,
     ".venv",
@@ -107,7 +107,7 @@ async function simulatedOllama() {
 }
 
 async function main() {
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "bravetrace-browser-"));
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "sourcedesk-browser-"));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const model = await simulatedOllama();
@@ -128,10 +128,10 @@ async function main() {
       cwd: root,
       env: {
         ...process.env,
-        BRAVETRACE_DATA_DIR: temp,
+        SOURCEDESK_DATA_DIR: temp,
         OLLAMA_BASE_URL: model.url,
-        BRAVETRACE_CHAT_MODEL: "browser-chat",
-        BRAVETRACE_EMBEDDING_MODEL: "browser-embed",
+        SOURCEDESK_CHAT_MODEL: "browser-chat",
+        SOURCEDESK_EMBEDDING_MODEL: "browser-embed",
       },
       stdio: ["ignore", "ignore", "pipe"],
     },
@@ -167,19 +167,19 @@ async function main() {
       );
     browser = await chromium.launch({
       headless: true,
-      executablePath: process.env.BRAVETRACE_BROWSER_EXECUTABLE || undefined,
+      executablePath: process.env.SOURCEDESK_BROWSER_EXECUTABLE || undefined,
       args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
     });
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1050 },
     });
     async function capture(name) {
-      if (!process.env.BRAVETRACE_SCREENSHOT_DIR) return;
-      fs.mkdirSync(process.env.BRAVETRACE_SCREENSHOT_DIR, {
+      if (!process.env.SOURCEDESK_SCREENSHOT_DIR) return;
+      fs.mkdirSync(process.env.SOURCEDESK_SCREENSHOT_DIR, {
         recursive: true,
       });
       await page.screenshot({
-        path: path.join(process.env.BRAVETRACE_SCREENSHOT_DIR, `${name}.png`),
+        path: path.join(process.env.SOURCEDESK_SCREENSHOT_DIR, `${name}.png`),
         fullPage: true,
       });
     }
@@ -196,7 +196,7 @@ async function main() {
       const download = await event;
       assert.match(
         download.suggestedFilename(),
-        /^BraveTrace_\d{4}-\d{2}-\d{2}\.md$/,
+        /^SourceDesk_\d{4}-\d{2}-\d{2}\.md$/,
       );
       return fs.readFileSync(await download.path(), "utf8");
     }
@@ -224,6 +224,61 @@ async function main() {
       .waitFor();
     assert.equal(await page.locator(".document-row").count(), 3);
     checks.push("sample collection and duplicate prevention");
+
+    await page.locator("#file-input").setInputFiles([
+      {
+        name: "rejected.bin",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from("invalid"),
+      },
+      {
+        name: "mixed-upload.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Batch recovery lighthouse evidence."),
+      },
+    ]);
+    await waitIdle();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".document-row").length === 4,
+    );
+    assert.match(
+      await page.locator("#notice").textContent(),
+      /1 document added.*1 file could not be added/,
+    );
+    await page
+      .getByRole("button", { name: "Remove mixed-upload.txt", exact: true })
+      .click();
+    await page.click("#delete-confirm");
+    await page.waitForFunction(
+      () => document.querySelectorAll(".document-row").length === 3,
+    );
+    await waitIdle();
+    checks.push(
+      "mixed batch continues after an invalid file and reports both outcomes",
+    );
+
+    const backupEvent = page.waitForEvent("download");
+    await page.click("#backup-button");
+    const backup = await backupEvent;
+    assert.match(
+      backup.suggestedFilename(),
+      /^SourceDesk-backup-\d{4}-\d{2}-\d{2}\.zip$/,
+    );
+    const backupFile = await backup.path();
+    assert.ok(fs.statSync(backupFile).size > 1000);
+    const validate = spawn(python, [
+      "-c",
+      "import sys, zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; assert 'manifest.json' in z.namelist()",
+      backupFile,
+    ]);
+    const validationCode = await new Promise((resolve) =>
+      validate.once("close", resolve),
+    );
+    assert.equal(validationCode, 0);
+    await waitIdle();
+    checks.push(
+      "workspace backup downloads a valid archive from the interface",
+    );
 
     await page.fill("#question", "operational audit logs retained");
     await page.click("#search-button");
@@ -384,8 +439,29 @@ async function main() {
     );
     const done = (await readApi("/api/health")).storage;
     assert.equal(done.embedded_chunks, done.chunks);
+    await page.click("#help-button");
+    assert.match(
+      await page.locator("#index-summary").textContent(),
+      /of .* passages indexed/,
+    );
+    model.state.holdEmbeddings = true;
+    await page.click("#rebuild-index");
+    await waitUntil(
+      () => model.state.release.length > 0,
+      "The rebuild did not start.",
+    );
+    assert.equal((await readApi("/api/health")).storage.embedded_chunks, 0);
+    model.state.holdEmbeddings = false;
+    model.state.release.splice(0).forEach((resolve) => resolve());
+    await page.waitForFunction(
+      () => document.querySelector("#index-progress").hidden,
+    );
+    assert.equal(
+      (await readApi("/api/health")).storage.embedded_chunks,
+      done.chunks,
+    );
     checks.push(
-      "background progress, concurrent search, reload, cancellation, and cached resume",
+      "background progress, concurrent search, reload, cancellation, cached resume, and full rebuild",
     );
 
     await page.selectOption("#retrieval", "hybrid");
@@ -528,6 +604,30 @@ async function main() {
     assert.deepEqual(errors, []);
     checks.push(
       "mobile library toggle, saved-result deletion, clear history, and zero JavaScript errors",
+    );
+
+    const restricted = await browser.newContext();
+    await restricted.addInitScript(() => {
+      Object.defineProperty(window, "sessionStorage", {
+        get() {
+          throw new DOMException("Blocked by browser policy", "SecurityError");
+        },
+      });
+    });
+    const restrictedPage = await restricted.newPage();
+    const restrictedErrors = [];
+    restrictedPage.on("pageerror", (error) =>
+      restrictedErrors.push(error.message),
+    );
+    await restrictedPage.goto(url);
+    await restrictedPage.waitForSelector(".document-row");
+    await restrictedPage.fill("#question", "pilot timeline");
+    await restrictedPage.click("#search-button");
+    await restrictedPage.waitForSelector(".source-card");
+    assert.deepEqual(restrictedErrors, []);
+    await restricted.close();
+    checks.push(
+      "research remains usable when browser session storage is blocked",
     );
     console.log(
       JSON.stringify(
