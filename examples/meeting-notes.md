@@ -1,6 +1,6 @@
 # Aster Labs — Pilot Planning Notes
 
-This is a fictional sample document supplied with EvidenceLens.
+This is a fictional sample document supplied with SourceDesk.
 
 ## Decisions
 The team confirmed the six-week pilot timeline. Evaluation questions will cover

@@ -1,6 +1,6 @@
 # Aster Labs — Document Research Pilot
 
-This is a fictional sample document supplied with EvidenceLens.
+This is a fictional sample document supplied with SourceDesk.
 
 ## Timeline
 The pilot runs for six weeks. Week 1 is for collecting approved documents and

@@ -1,6 +1,6 @@
 # Aster Labs — Data Handling Policy
 
-This is a fictional sample document supplied with EvidenceLens.
+This is a fictional sample document supplied with SourceDesk.
 
 ## Storage and access
 Research documents remain on the machine running the pilot. Access is limited
