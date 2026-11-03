@@ -1368,7 +1368,7 @@ dialog::backdrop {
   }
 }
 
-/* Research workspace enhancements */
+/* Research history and document navigation. */
 .sidebar-brand {
   display: flex;
   justify-content: space-between;
