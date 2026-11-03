@@ -4,7 +4,7 @@ Search documents on your computer and open the passages behind each result.
 Import PDFs, Markdown, or text files, then search for a topic or ask a question.
 Documents and saved research stay on your computer.
 
-**Version 1.0.0 · Created by SamYKar / BravenDev · MIT license**
+**Version 1.0.0 · Created by SamYKar · MIT license**
 
 ## Start the application
 
